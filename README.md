@@ -12,6 +12,7 @@ Provision a complete customer infrastructure environment in AWS with a single co
 - Secure multi-tenant resource isolation
 - Operational automation for SaaS onboarding
 
+
 ## Overview
 
 This project demonstrates an automated infrastructure provisioning workflow used to onboard new enterprise customers to a hosted SaaS platform.
@@ -54,6 +55,9 @@ Provisioning a single environment typically required **30–45 minutes** of manu
 ---
 
 ## Architecture
+### Architecture Diagram
+
+![Architecture](diagrams/architecture.png)
 
 The solution introduces a **CloudFormation template combined with a deployment script** that automates the full onboarding workflow.
 
@@ -70,6 +74,9 @@ The solution introduces a **CloudFormation template combined with a deployment s
 ---
 
 ## Deployment Model
+### Deployment Workflow
+
+![Deployment](diagrams/deployment-workflow.png)
 
 Each customer environment is deployed as an **independent CloudFormation stack**.
 
@@ -97,7 +104,7 @@ A lightweight shell script is used to deploy a new customer environment.
 
 ```bash
 ./new-customer.sh "Customer Name" INSTANCE_TYPE BUCKET_NAME IAM_USER RECORD_NAME
-
+```
 ## Example Deployment
 
 ```bash
@@ -123,6 +130,8 @@ This DNS record points to the shared application endpoint used by the hosted pla
 ---
 
 ## Security Model
+
+![Security](diagrams/security-model.png)
 
 The architecture implements several security controls:
 
@@ -176,6 +185,10 @@ This configuration enables secure browser-based uploads and external system inte
 AWS Console → CloudFormation → Stacks
 
 ### Decommission a Customer
+
+#### Resource-Lifecycle
+
+![Resource](diagrams/resource-lifecycle.png)
 
 ```bash
 aws cloudformation delete-stack --stack-name cust-customername
@@ -292,6 +305,69 @@ The final system enables engineers to provision a full customer environment usin
 Provisioning time was reduced from **30–45 minutes to under 2 minutes**, while also eliminating configuration drift and forgotten resources.
 
 
+## Failure Scenarios & Operational Resilience
+
+When designing automated infrastructure systems, it is important to consider how the system behaves during failures and partial deployments.
+
+Several potential failure scenarios were considered during the implementation of this onboarding automation.
+
+---
+
+### CloudFormation Deployment Failure
+
+A stack deployment may fail due to:
+
+- invalid parameters
+- IAM permission issues
+- resource naming conflicts
+- quota limits
+
+**Mitigation**
+
+AWS CloudFormation automatically rolls back failed deployments, ensuring that partially created infrastructure is cleaned up and the environment returns to a consistent state.
+
+---
+
+### S3 Bucket Name Conflicts
+
+S3 bucket names must be globally unique. A deployment may fail if the requested bucket name already exists.
+
+**Mitigation**
+
+The deployment process requires the operator to supply a unique bucket name per customer. In production environments this could be further improved by automatically generating names using account identifiers or timestamps.
+
+---
+
+### Partial Manual Resource Changes
+
+Manual changes to infrastructure after deployment may cause **configuration drift** between the CloudFormation template and the deployed resources.
+
+**Mitigation**
+
+All infrastructure changes should be performed through the CloudFormation template to maintain a single source of truth.
+
+---
+
+### Incomplete Environment Teardown
+
+Manual infrastructure setups often leave resources behind when environments are removed.
+
+This can result in:
+
+- unnecessary cloud costs
+- security risks from unused credentials
+- operational overhead during audits
+
+**Mitigation**
+
+Each customer environment is deployed as an independent CloudFormation stack. When the stack is deleted, all associated resources are removed automatically.
+
+```bash
+aws cloudformation delete-stack --stack-name cust-customername
+```
+
+---
+
 ## Lessons Learned
 
 Key takeaways from implementing this automation:
@@ -305,7 +381,7 @@ Key takeaways from implementing this automation:
 
 ## Future Improvements
 
-Potential future enhancements include:
+Additional resilience improvements could include:
 
 - CI/CD pipelines for infrastructure deployments
 - automated credential distribution
