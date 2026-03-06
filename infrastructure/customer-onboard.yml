@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Customer onboarding - EC2 + S3 + IAM User + Route53 DNS
+
+Parameters:
+  CustomerName:
+    Type: String
+    Description: Customer display name used for tags
+
+  InstanceType:
+    Type: String
+    Default: t3a.large
+    Description: EC2 instance size
+
+  BucketName:
+    Type: String
+    Description: S3 bucket name
+
+  IamUserName:
+    Type: String
+    Description: IAM user name to create
+
+  RecordName:
+    Type: String
+    Description: DNS record prefix
+
+  HostedZoneId:
+    Type: String
+    Description: Route53 hosted zone ID
+
+  HostedZoneName:
+    Type: String
+    Default: exampledomain.com
+    Description: Public DNS zone name
+
+  AmiId:
+    Type: String
+    Default: ami-1234567890abcdef0
+    Description: Example AMI placeholder
+
+Resources:
+  CustomerIamUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref IamUserName
+
+  CustomerBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: ["GET", "PUT", "POST", "HEAD"]
+            AllowedOrigins: ["*"]
+            ExposedHeaders:
+              - ETag
+              - x-amz-request-id
+              - x-amz-id-2
+              - x-amz-server-side-encryption
+            MaxAge: 3000
+      Tags:
+        - Key: Customer
+          Value: !Ref CustomerName
+        - Key: Project
+          Value: CustomerOnboardingDemo
+
+  CustomerBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CustomerBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCustomerIamUser
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt CustomerIamUser.Arn
+            Action:
+              - s3:DeleteObject
+              - s3:GetObject
+              - s3:GetObjectAttributes
+              - s3:ListBucket
+              - s3:PutObject
+            Resource:
+              - !Sub "arn:aws:s3:::${BucketName}"
+              - !Sub "arn:aws:s3:::${BucketName}/*"
+
+  CustomerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpPutResponseHopLimit: 2
+        HttpTokens: required
+      Tags:
+        - Key: Name
+          Value: !Sub "App Host - ${CustomerName}"
+        - Key: Customer
+          Value: !Ref CustomerName
+
+  CustomerDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${RecordName}.${HostedZoneName}"
+      Type: CNAME
+      TTL: "60"
+      ResourceRecords:
+        - !Sub "shared.${HostedZoneName}"
+
+Outputs:
+  InstanceId:
+    Value: !Ref CustomerInstance
+  BucketName:
+    Value: !Ref CustomerBucket
+  IamUserArn:
+    Value: !GetAtt CustomerIamUser.Arn
+  RecordFQDN:
+    Value: !Sub "${RecordName}.${HostedZoneName}"
